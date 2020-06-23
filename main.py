@@ -1,8 +1,9 @@
 import telebot
 import re
 from telebot import types
+from tokens import token_telegram, token_vk
 
-bot = telebot.TeleBot('1213620038:AAHIMjiAN56iioRKPzYINk5N7CcICJer46g')
+bot = telebot.TeleBot(token_telegram)
 
 flag_vk = 0 # если пользователь хочет отправить сообщение в VK
 flag_mail = 0 # если пользователь хочет отправить сообщение на почту
