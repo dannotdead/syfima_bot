@@ -1,5 +1,6 @@
 import telebot
 import re
+from vk_integration import message_handler
 from telebot import types
 from tokens import token_telegram, token_vk
 
@@ -10,11 +11,11 @@ flag_mail = 0 # если пользователь хочет отправить 
 # нужны для состояния данных от пользователя такие как id или mail
 
 # мб просто переменные, пока хранится в массиве для нескольких vkid и mail
-vk_id = [] # хранит в себе id vk
+# vk_id = [] # хранит в себе id vk
 mail_id = [] # хранит в себе mail
 
 # старый вариант
-# vk_id = ''
+vk_id = ''
 # mail_id = ''
 
 @bot.message_handler(commands=['start'])
@@ -41,18 +42,26 @@ def send_loc(message):
     markup.add(list_key[0], list_key[1], list_key[2])
     bot.send_message(message.from_user.id, "Куда Вы хотите чтобы я Вам ответил:", reply_markup=markup)
     
-
 @bot.message_handler(commands=['id']) # неизвестно насчет аргументов хэндлера, пока заглушка в виде команды
 def get_vk_id(message):
-    global vk_id
+    global vk_id, flag_vk
     # vk_id += 'https://vk.com/' + message.text - старый вариант
-    vk_id.append('https://vk.com/' + message.text)
-    print(vk_id) # заглушка для БД
+    pattern = re.compile(r'\d')
+    result = pattern.findall(message.text)
+    if result:
+        vk_id = message.text
+        flag_vk = 0
+        bot.send_message(message.from_user.id, 'Сообщение отправлено')
+        message_handler(vk_id)
+    else:
+        bot.send_message(message.from_user.id, 'Введите id в виде числа')
+    # vk_integration.id = message.text
+    # print(vk_id) # заглушка для БД
 
 @bot.message_handler(commands=['mail']) # неизвестно насчет аргументов хэндлера, пока заглушка в виде команды
 def get_mail_id(message):
     global mail_id, flag_mail
-    pattern = re.compile('[\w.-]+@[\w.-]+\.?[\w]+?')
+    pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')
     result = pattern.findall(message.text)
     if result:
         mail_id.append(message.text) # добавил почту в массив почт
@@ -64,7 +73,7 @@ def get_mail_id(message):
 @bot.message_handler(content_types=['text'])
 def get_text_messages(message):
     user_id = message.from_user.id
-    list_welcome = ['прив', 'привет', 'здравствуй', 'здарова', 'здаров', 'ку', 'хай', 'вассап', 'hi', 'hello']
+    # list_welcome = ['прив', 'привет', 'здравствуй', 'здарова', 'здаров', 'ку', 'хай', 'вассап', 'hi', 'hello']
     # if message.text.lower() in list_welcome:
     #     print(user_id)
     #     bot.send_message(user_id, 'Привет, чем я могу тебе помочь? \nПиши /help для получения всех комманд')
@@ -77,8 +86,7 @@ def get_text_messages(message):
     elif message.text == 'VK':
         global flag_vk, vk_id
         flag_vk = 1
-        print('1:', flag_vk)
-        if vk_id == []:
+        if vk_id == '':
             bot.send_message(message.from_user.id, 'Напишите здесь id своей страницы в VK')
         else:
             bot.send_message(message.from_user.id, 'Мне уже известно ваше id в VK, отправляю сообщение') # заглушка для проверки
@@ -93,10 +101,9 @@ def get_text_messages(message):
     else:
         if flag_vk == 1:
             get_vk_id(message)
-            flag_vk = 0
         elif flag_mail == 1:
             get_mail_id(message)
         else:
             bot.send_message(user_id, 'Я тебя не понимаю, давай общаться на человеческом языке, можешь, например, вызвать /help')
 
-bot.polling(none_stop=True, interval=5)
+bot.polling(none_stop=True, interval=2)
