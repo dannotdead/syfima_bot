@@ -8,6 +8,11 @@ def activate_telegram_bot():
 
     # отказываться от простых флагов и менять флаги для определенного пользователя 
 
+    # хранится порядковый номер пользователя
+    # если сервер перезапущен то берется из БД и прибавляется 1 для новых пользователей
+    result = server.get_serial_number_after_restart()
+    new_user_ser_num = int(result[0]) + 1 
+
     flag_vk = 0 # если пользователь хочет отправить сообщение в VK
     flag_mail = 0 # если пользователь хочет отправить сообщение на почту
     flag_reg = 0
@@ -19,8 +24,12 @@ def activate_telegram_bot():
     mail_id = [] # хранит в себе mail
     # старый вариант
     # mail_id = ''
+    # new_user_key = 1
+    
+    # user_data = {}
 
-    def generate_keyboard(*answer):    
+    def generate_keyboard(*answer): 
+        # Метод который создает клавиатуру с кнопками   
         keyboard = telebot.types.ReplyKeyboardMarkup(one_time_keyboard=True, resize_keyboard=True)
         for item in answer:
             button = telebot.types.KeyboardButton(item)
@@ -29,11 +38,18 @@ def activate_telegram_bot():
 
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
+        nonlocal new_user_ser_num
+        check_reg_telegram = server.new_account_telegram(new_user_ser_num, message.chat.id)
+        # если проверка прошла успешно и пользователь не найден в БД
+        # то я увеличиваю пару ключ значение на 1
+        if check_reg_telegram:
+            result = server.get_serial_number_after_restart()
+            new_user_ser_num = int(result[0]) + 1
         bot.send_message(message.from_user.id, 'Давайте начнем, /help для вызова команд')
 
     @bot.message_handler(commands=['help'])
     def send_help(message):
-        keyboard = generate_keyboard('/start', '/help', '/choose_loc', '/question')
+        keyboard = generate_keyboard('/start', '/help', '/choose_loc', '/question', '/my_id')
         bot.send_message(message.from_user.id,   '1. /start - начало работы \
                                                 \n2. /help - помощь по командам \
                                                 \n3. /choose_loc - выбор где вы хотите продолжить общение \
@@ -60,7 +76,8 @@ def activate_telegram_bot():
         # метод который позволяет вывести id пользователя
         # данные беруться из БД
         # проверка id telegram пользователя и возврат его id
-        bot.send_message(message.from_user.id, '')
+        my_id = server.get_my_id_from_db(message.chat.id, 1)
+        bot.send_message(message.chat.id, 'Ваш уникальный идентификатор пользователя: ' + str(my_id))
 
     def send_question(message):
         # метод который ищет вопрос в БД
@@ -68,19 +85,6 @@ def activate_telegram_bot():
         flag_question = 0
         ret = server.call_db(message)
 
-    @bot.message_handler(commands=['id']) # неизвестно насчет аргументов хэндлера, пока заглушка в виде команды
-    def get_vk_id(message):
-        nonlocal flag_vk, flag_reg_vk, vk_id
-        pattern = re.compile(r'\d{9}')
-        result = pattern.findall(message.text)
-        if result:
-            bot.send_message(message.from_user.id, 'VK успешно зарегестрированы')
-            flag_reg_vk = 0
-            print('работает')
-        else:
-            bot.send_message(message.from_user.id, 'Введите id в виде 9-ти значного числа')
-
-    # @bot.message_handler(commands=['mail']) # неизвестно насчет аргументов хэндлера, пока заглушка в виде команды
     def get_mail_id(message):
         nonlocal mail_id, flag_mail
         pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')
@@ -90,6 +94,9 @@ def activate_telegram_bot():
             # если пользователь ответи НЕТ, то просим ввести эл адрес и затем отправляем
         # если пришло false значит просим ввести эл адрес и затем отправляем
         # далее выводим, что сообщение отправлено
+
+        #НЕ ДОДЕЛАНА ПРОВЕРКА ПОЧТЫ ДО КОНЦА
+        
         if result:
             flag_mail = 0
             send_text = server.send_mail(message.text)
@@ -106,7 +113,7 @@ def activate_telegram_bot():
         nonlocal flag_reg, flag_reg_vk, flag_question, flag_mail
 
         if message.text.lower() == 'vk':
-            msg = server.check_vk_db() # проверка зарегестрирован ли пользователь в бд с VK-id
+            msg = server.check_vk_db(message.chat.id, 1) # проверка зарегестрирован ли пользователь в БД с VK-id
             if msg:            
                 bot.send_message(user_id, 'Сообщение отправлено')
             else:
@@ -115,16 +122,21 @@ def activate_telegram_bot():
             msg = server.call_db(message) # Обработка сообщения на сервере и ответ прямо в телегу
             bot.send_message(user_id, msg)
         elif message.text.lower() == 'почта':
-            flag_mail = 1
-            bot.send_message(user_id, 'Введите почту')
+            check_mail, mail = server.check_mail(message.chat.id, 1)
+            if check_mail:
+                bot.send_message(user_id, 'Возможно вы хотите отправить на эту почту: ' + mail + ' это так?')
+            else:
+                flag_mail = 1
+                bot.send_message(user_id, 'Введите почту')
         else:
-            if flag_reg_vk == 1:
-                get_vk_id(message)
-            elif flag_mail == 1:
+            # if flag_reg_vk == 1:
+            #     get_vk_id(message)
+            # el
+            if flag_mail == 1:
                 get_mail_id(message)
             elif flag_question == 1:
                 send_question(message)
             else:
-                bot.send_message(user_id, 'Я тебя не понимаю, давай общаться на человеческом языке, можешь, например, вызвать /help')
+                bot.send_message(user_id, 'Я тебя не понимаю, давай общаться на человеческом языке, можешь, например, вызвать /start')
 
     bot.polling(none_stop=True, interval=2)
