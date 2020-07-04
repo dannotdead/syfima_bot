@@ -2,31 +2,19 @@
 import re
 import tokens
 import server
+from enum import Enum
+
+class States(Enum):
+    # Состояния пользователя
+    S_START = '1' 
+    S_QUESTION = '2'
+    S_CHOOSE_LOC = '3'
+    S_CHOOSE_LOC_VK = '3.1'
+    S_CHOOSE_LOC_MAIL = '3.2'
+    S_FEEDBACK = '4' # Состояние обратная связь
 
 def activate_telegram_bot():
     bot = telebot.TeleBot(tokens.token_telegram)
-
-    # отказываться от простых флагов и менять флаги для определенного пользователя 
-
-    # хранится порядковый номер пользователя
-    # если сервер перезапущен то берется из БД и прибавляется 1 для новых пользователей
-    result = server.get_serial_number_after_restart()
-    new_user_ser_num = int(result[0]) + 1 
-
-    flag_vk = 0 # если пользователь хочет отправить сообщение в VK
-    flag_mail = 0 # если пользователь хочет отправить сообщение на почту
-    flag_reg = 0
-    flag_reg_vk = 0
-    # нужны для состояния данных от пользователя такие как id или mail
-    flag_question = 0
-    # мб просто переменные, пока хранится в массиве для нескольких vkid и mail
-    vk_id = 0 # хранит в себе id vk
-    mail_id = [] # хранит в себе mail
-    # старый вариант
-    # mail_id = ''
-    # new_user_key = 1
-    
-    # user_data = {}
 
     def generate_keyboard(*answer): 
         # Метод который создает клавиатуру с кнопками   
@@ -38,55 +26,72 @@ def activate_telegram_bot():
 
     @bot.message_handler(commands=['start'])
     def send_welcome(message):
-        nonlocal new_user_ser_num
-        check_reg_telegram = server.new_account_telegram(new_user_ser_num, message.chat.id)
-        # если проверка прошла успешно и пользователь не найден в БД
-        # то я увеличиваю пару ключ значение на 1
-        if check_reg_telegram:
-            result = server.get_serial_number_after_restart()
-            new_user_ser_num = int(result[0]) + 1
-        bot.send_message(message.from_user.id, 'Давайте начнем, /help для вызова команд')
+        # начало
+        bot.send_message(message.chat.id, 'Давайте начнем, задайте мне вопрос. Для вызова всех команд используйте /help')
+        server.db_set_state(message.chat.id, 1, States.S_QUESTION.value)
 
-    @bot.message_handler(commands=['help'])
-    def send_help(message):
-        keyboard = generate_keyboard('/start', '/help', '/choose_loc', '/question', '/my_id')
-        bot.send_message(message.from_user.id,   '1. /start - начало работы \
-                                                \n2. /help - помощь по командам \
-                                                \n3. /choose_loc - выбор где вы хотите продолжить общение \
-                                                \n4. /question - задайте мне вопрос \
-                                                \n5. /my_id - узнать свой id для авторизации через другие мессенджеры \
-                                                \nВыберите команду:', reply_markup=keyboard)
-
-    @bot.message_handler(commands=['choose_loc'])
-    def send_loc(message):
-        keyboard = generate_keyboard('VK', 'Telegram', 'Почта')
-        bot.send_message(message.from_user.id, 'Куда вы хотите чтобы я вам ответил:', reply_markup=keyboard)
-        
-    @bot.message_handler(commands=['question'])
-    def get_question(message):
-        nonlocal flag_question
-        flag_question = 1
-        list_help = '1. Компьютерные технологии \n2. Менеджмент \n3. Игры \n4. Математика'
-        bot.send_message(message.from_user.id, list_help)
-        bot.send_message(message.from_user.id, 'Задайте мне вопрос на одну из тем')
-            
-    @bot.message_handler(commands=['my_id'])
-    def get_my_id(message):
-        # нужен для авторизации в других мессенджерах, чтобы другие мессенджеры поняли в какую строку в БД записывать свои id
-        # метод который позволяет вывести id пользователя
-        # данные беруться из БД
-        # проверка id telegram пользователя и возврат его id
-        my_id = server.get_my_id_from_db(message.chat.id, 1)
-        bot.send_message(message.chat.id, 'Ваш уникальный идентификатор пользователя: ' + str(my_id))
-
+    @bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == States.S_QUESTION.value)
     def send_question(message):
-        # метод который ищет вопрос в БД
-        nonlocal flag_question
-        flag_question = 0
-        ret = server.call_db(message)
+        # проверка вопроса в БД
+        detect = server.find_question(message.chat.id, 1, message.text)
+        if detect:
+            bot.send_message(message.chat.id, 'Ответ на заданный вопрос найден')
+            keyboard = generate_keyboard('VK', 'Telegram', 'Почта')
+            bot.send_message(message.chat.id, 'Куда вы хотите чтобы я вам ответил:', reply_markup=keyboard)
+            server.db_set_state(message.chat.id, 1, States.S_CHOOSE_LOC.value)
+        else:
+            if message.text == '/help':
+                send_help(message)
+            else:
+                bot.send_message(message.chat.id, 'Ответ не был найден, попробуйте задать вопрос снова')
+    
+    @bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == States.S_CHOOSE_LOC.value)
+    def send_answer(message):
+        # выбор куда отправить сообщение
+        if message.text.lower() == 'vk':
+            check_vk_id = server.check_vk_db(message.chat.id, 1)
+            if check_vk_id:
+                bot.send_message(message.chat.id, 'Сообщение отправлено в VK')
+                server.db_set_state(message.chat.id, 1, States.S_QUESTION.value) # Должно переходить в S_FEEDBACK
+                bot.send_message(message.chat.id, 'Задайте мне вопрос')
+            else:
+                bot.send_message(message.chat.id, 'Я не знаю ваш VK-id напишите его, а также разрешите отправлять мне сообщения в VK в диалоге' + tokens.bot_vk_url)
+                server.db_set_state(message.chat.id, 1, States.S_CHOOSE_LOC_VK.value)
+        elif message.text.lower() == 'telegram':
+            answer = server.send_answer_to_telegram(message.chat.id, 1)
+            bot.send_message(message.chat.id, 'Ответ на заданный вопрос: ' + answer)
+            server.db_set_state(message.chat.id, 1, States.S_QUESTION.value) # Должно переходить в S_FEEDBACK
+            bot.send_message(message.chat.id, 'Задайте мне вопрос')
+        elif message.text.lower() == 'почта':
+            bot.send_message(message.chat.id, 'Пожалуйста напишите почту на которую хотите получить ответ')
+            server.db_set_state(message.chat.id, 1, States.S_CHOOSE_LOC_MAIL.value)
+    
+    @bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == States.S_CHOOSE_LOC_VK.value)
+    def get_vk_id(message):
+        # если хотим отправить сообщение в вк
+        if not message.text.isdigit():
+        # Состояние не меняем, поэтому только выводим сообщение об ошибке и ждём дальше
+            bot.send_message(message.chat.id, 'VK-id - это 9-ти значное число, мне нужно число из 9 цифр')
+            return
+        if len(message.text) < 9 or len(message.text) > 9:
+            bot.send_message(message.chat.id, 'Ровно 9 цифр пожалуйста')
+            return
+        else:
+            vk_id_to_db = server.get_vk_db(message.text, message.chat.id)
+            if vk_id_to_db:
+                check_vk_id = server.check_vk_db(message.chat.id, 1)
+                if check_vk_id:
+                    bot.send_message(message.chat.id, 'Все верно, отправляю сообщение в VK')
+                    server.db_set_state(message.chat.id, 1, States.S_QUESTION.value) # Должно переходить в S_FEEDBACK
+                    bot.send_message(message.chat.id, 'Задайте мне вопрос')
+                else:
+                    bot.send_message(message.chat.id, 'Что-то пошло не так')
+            else:
+                bot.send_message(message.chat.id, 'Что-то пошло не так 2')
 
-    def get_mail_id(message):
-        nonlocal mail_id, flag_mail
+    @bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == States.S_CHOOSE_LOC_MAIL.value)
+    def get_mail(message):
+        # если хотим отправить сообщение на почту
         pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')
         result = pattern.findall(message.text)
         # если пришло true значит спрашиваем отправить письмо на эту почту?: (почта)
@@ -94,49 +99,29 @@ def activate_telegram_bot():
             # если пользователь ответи НЕТ, то просим ввести эл адрес и затем отправляем
         # если пришло false значит просим ввести эл адрес и затем отправляем
         # далее выводим, что сообщение отправлено
-
-        #НЕ ДОДЕЛАНА ПРОВЕРКА ПОЧТЫ ДО КОНЦА
-        
         if result:
-            flag_mail = 0
-            send_text = server.send_mail(message.text)
+            send_text = server.send_mail(message.chat.id, 1, message.text)
             if send_text:
-                bot.send_message(message.from_user.id, 'Сообщение отправлено, проверьте письмо во вкладке входящих сообщений или спама')
+                bot.send_message(message.chat.id, 'Сообщение отправлено, проверьте письмо во вкладке входящих сообщений или спама')
+                server.db_set_state(message.chat.id, 1, States.S_QUESTION.value) # Должно переходить в S_FEEDBACK
+                bot.send_message(message.chat.id, 'Задайте мне вопрос')
             else: 
-                bot.send_message(message.from_user.id, 'Что-то пошло не так')
+                bot.send_message(message.chat.id, 'Что-то пошло не так')
         else:
-            bot.send_message(message.from_user.id, 'Введен неправильный адрес, попробуйте еще раз')
+            bot.send_message(message.chat.id, 'Введен неправильный адрес, попробуйте еще раз')
+
+    @bot.message_handler(commands=['help'])
+    def send_help(message):
+        # помощь
+        keyboard = generate_keyboard('/start', '/help', '/choose_loc')
+        bot.send_message(message.chat.id,   '1. /start - начало работы \
+                                                \n2. /help - помощь по командам \
+                                                \n3. /choose_loc - выбор где вы хотите продолжить общение \
+                                                \nВыберите команду:', reply_markup=keyboard)
 
     @bot.message_handler(content_types=['text'])
     def get_text_messages(message):
-        user_id = message.from_user.id
-        nonlocal flag_reg, flag_reg_vk, flag_question, flag_mail
+        # если какойто посторонний текст то вывод данного сообщения
+        bot.send_message(message.chat.id, 'Я тебя не понимаю, давай общаться на человеческом языке, можешь, например, вызвать /start')
 
-        if message.text.lower() == 'vk':
-            msg = server.check_vk_db(message.chat.id, 1) # проверка зарегестрирован ли пользователь в БД с VK-id
-            if msg:            
-                bot.send_message(user_id, 'Сообщение отправлено')
-            else:
-                bot.send_message(user_id, 'Напишите боту в VK свой id (команда /my_id), чтобы он мог вам туда ответить, а также разрешите отправлять сообщения и повторите попытку\n' + tokens.bot_vk_url)
-        elif message.text.lower() == 'telegram':
-            msg = server.call_db(message) # Обработка сообщения на сервере и ответ прямо в телегу
-            bot.send_message(user_id, msg)
-        elif message.text.lower() == 'почта':
-            check_mail, mail = server.check_mail(message.chat.id, 1)
-            if check_mail:
-                bot.send_message(user_id, 'Возможно вы хотите отправить на эту почту: ' + mail + ' это так?')
-            else:
-                flag_mail = 1
-                bot.send_message(user_id, 'Введите почту')
-        else:
-            # if flag_reg_vk == 1:
-            #     get_vk_id(message)
-            # el
-            if flag_mail == 1:
-                get_mail_id(message)
-            elif flag_question == 1:
-                send_question(message)
-            else:
-                bot.send_message(user_id, 'Я тебя не понимаю, давай общаться на человеческом языке, можешь, например, вызвать /start')
-
-    bot.polling(none_stop=True, interval=2)
+    bot.polling(none_stop=True, interval=10)
