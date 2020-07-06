@@ -1,0 +1,6 @@
+pyTelegramBotAPI 		3.7.1
+vk-api			11.8.0
+___________________________
+pylint                 		2.5.3
+pip                    		20.1.1
+requests               		2.24.0

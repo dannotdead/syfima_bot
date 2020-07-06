@@ -1,7 +1,9 @@
-import vk_api
+﻿import vk_api
 import vk_api.longpoll
+
 import tokens
 import server
+
 
 vk_session = vk_api.VkApi(token = tokens.token_vk)
 session_api = vk_session.get_api()
