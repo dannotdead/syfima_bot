@@ -5,11 +5,13 @@ import vk_integration
 
 
 def start_server():
-    thread1 = threading.Thread(target=telegram_integration.activate_telegram_bot,
+    thread1 = threading.Thread(target=telegram_integration.TelegramBot,
                                args=(), name='Active Telegram')
-    thread2 = threading.Thread(target=vk_integration.activate_vk_bot,
+    thread2 = threading.Thread(target=vk_integration.VKBot,
                                args=(), name='Active VK')
     thread1.start()
     thread2.start()
 
-start_server()
+
+if __name__ == '__main__':
+    start_server()
