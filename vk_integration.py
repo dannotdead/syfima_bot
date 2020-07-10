@@ -15,6 +15,10 @@ class VKBot(object):
     session_api = vk_session.get_api()
     longpoll = vk_api.longpoll.VkLongPoll(vk_session)
 
+    def __init__(self):
+        self._COMMANDS = ['/start', '/help', '/reset', ]
+        self.vk_start()
+
     @classmethod
     def message_sender(cls, id, text, keyboard=''):
         cls.vk_session.method('messages.send', {'user_id': id, 'message': text,
@@ -63,8 +67,7 @@ class VKBot(object):
     keyboard_loc = json.dumps(keyboard, ensure_ascii=False).encode('utf-8')
     keyboard_loc = str(keyboard_loc.decode('utf-8'))
 
-    def __init__(self):
-        self._COMMANDS = ['/start', '/help', '/reset', ]
+    def vk_start(self):
         for event in self.longpoll.listen():
             if event.type == vk_api.longpoll.VkEventType.MESSAGE_NEW:
                 if event.to_me:
@@ -123,9 +126,7 @@ class VKBot(object):
         detect = server.find_question(user_id, 2, text)
         if detect:
             self.message_sender(user_id, 'Ответ на заданный вопрос найден', self.keyboard_loc)
-            # keyboard = self.generate_keyboard('VK', 'Telegram', 'Почта')
             self.message_sender(user_id, 'Куда вы хотите чтобы я вам ответил:',)
-                                  # reply_markup=keyboard)
             server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC.value)
 
     def get_location(self, user_id, text):
@@ -185,11 +186,3 @@ class VKBot(object):
                                     user_states.States.S_QUESTION.value)
             else:
                 self.message_sender(user_id, 'Что-то пошло не так 3')
-        # self.message_sender(user_id,
-        #                     'Проверка')
-            # else:
-            #     if event.chat.id == 'help':
-            #         send_help(event)
-            #     else:
-            #         self.bot.send_message(event.chat.id,
-            #                               'Ответ не был найден, попробуйте задать вопрос снова')
