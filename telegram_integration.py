@@ -65,8 +65,7 @@ class TelegramBot(object):
             keyboard = self.generate_keyboard('/start', '/help', '/choose_loc')
             self.bot.send_message(message.chat.id, '1. /start - начало работы \n'
                                                    '2. /help - помощь по командам \n'
-                                                   '3. /choose_loc - выбор '
-                                                   'где вы хотите продолжить общение \n'
+                                                   '3. /reset - сброс вопроса \n'
                                                    'Выберите команду:',
                                                     reply_markup=keyboard)
 
@@ -122,6 +121,8 @@ class TelegramBot(object):
                                       'Пожалуйста напишите почту на которую хотите получить ответ')
                 server.db_set_state(message.chat.id, 1,
                                     user_states.States.S_CHOOSE_LOC_MAIL.value)
+            else:
+                self.bot.send_message(message.chat.id, 'Пожалуйста выберите куда хотите получить ответ: VK, Telegram, Mail')
 
         # Блок кода для ввода VK-id, вызывается в том случае если пользователь хочет получить
         # ответ в VK, но его id нет в базе данных.

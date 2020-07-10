@@ -4,8 +4,10 @@ import psycopg2
 from email.mime.text import MIMEText
 from email.header import Header
 from sqlalchemy import create_engine, select, update, insert, exists, MetaData, Table
+
 import tokens
 import msg_to_vk
+import msg_to_telegram
 
 
 engine = create_engine(f'postgresql://postgres:'
@@ -24,6 +26,12 @@ def db_get_state(user_id, messanger_id):
             result = conn.execute(sql)
             current_state = result.fetchone()[0]
             return current_state
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = select([users.c.state]).where(users.c.vk_user_id == user_id)
+            result = conn.execute(sql)
+            current_state = result.fetchone()[0]
+            return current_state
 
 # Запись состояния для пользователя.
 def db_set_state(user_id, messanger_id, state):
@@ -31,12 +39,15 @@ def db_set_state(user_id, messanger_id, state):
         with engine.connect() as conn:
             sql = update(users).values({'state': state}).where(users.c.telegram_user_id == user_id)
             conn.execute(sql)
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = update(users).values({'state': state}).where(users.c.vk_user_id == user_id)
+            conn.execute(sql)
 
 # Создание новой записи в базе данных, если пользователь пишет из телеграма.
 def new_account_telegram(user_id):
     # Прежде чем добавить пользователя нужно сделать проверку на его наличие в БД,
     # если его там нет то создаем новую запись.
-
     with engine.connect() as conn:
         sql = select([users.c.telegram_user_id]).where(users.c.telegram_user_id == user_id)
         result = conn.execute(sql)
@@ -45,6 +56,20 @@ def new_account_telegram(user_id):
     if result1 is None:
         with engine.connect() as conn:
             sql = insert(users).values({'telegram_user_id': user_id})
+            conn.execute(sql)
+
+# Создание новой записи в базе данных, если пользователь пишет из vk.
+def new_account_vk(user_id):
+    # Прежде чем добавить пользователя нужно сделать проверку на его наличие в БД,
+    # если его там нет то создаем новую запись.
+    with engine.connect() as conn:
+        sql = select([users.c.vk_user_id]).where(users.c.vk_user_id == user_id)
+        result = conn.execute(sql)
+        result1 = result.fetchone()[0]
+
+    if result1 is None:
+        with engine.connect() as conn:
+            sql = insert(users).values({'vk_user_id': user_id})
             conn.execute(sql)
 
 # Запись нового VK-id, если telegram уже существует.
@@ -64,16 +89,29 @@ def check_vk_db(user_id, messanger_id):
             sql = select([users.c.vk_user_id]).where(users.c.telegram_user_id == user_id)
             result = conn.execute(sql)
             check_vk_id = result.fetchone()[0]
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = select([users.c.vk_user_id]).where(users.c.vk_user_id == user_id)
+            result = conn.execute(sql)
+            check_vk_id = result.fetchone()[0]
 
     if check_vk_id == 0 or check_vk_id is None:
         return False
     else:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-            msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
-            return True
+        if messanger_id == 1:
+            with engine.connect() as conn:
+                sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
+                result = conn.execute(sql)
+                answer = result.fetchone()[0]
+                msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
+                return True
+        if messanger_id == 2:
+            with engine.connect() as conn:
+                sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
+                result = conn.execute(sql)
+                answer = result.fetchone()[0]
+                msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
+                return True
 
 # Отправка письма на почту пользователя.
 def send_mail(user_id, messanger_id, mail):
@@ -117,6 +155,11 @@ def find_question(user_id, messanger_id, message):
                 sql = update(users).values({'answers': answer1}).where(users.c.telegram_user_id == user_id)
                 conn.execute(sql)
                 return True
+        if messanger_id == 2:
+            with engine.connect() as conn:
+                sql = update(users).values({'answers': answer1}).where(users.c.vk_user_id == user_id)
+                conn.execute(sql)
+                return True
     else:
         return False
 
@@ -136,12 +179,24 @@ def send_answer_to_telegram(user_id, messanger_id):
             sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
             result = conn.execute(sql)
             answer = result.fetchone()[0]
-        return answer
+        if answer is not None:
+            with engine.connect() as conn:
+                sql = select([users.c.telegram_user_id]).where(users.c.vk_user_id == user_id)
+                result = conn.execute(sql)
+                tel_id = result.fetchone()[0]
+                msg_to_telegram.send(tel_id, answer)
+                return True
+
 
 # Запись оценки пользователя в базу данных
 def get_feedback_db(user_id, messanger_id, mark):
     if messanger_id == 1:
         with engine.connect() as conn:
             sql = update(users).values({'user_mark': mark}).where(users.c.telegram_user_id == user_id)
+            conn.execute(sql)
+            return True
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = update(users).values({'user_mark': mark}).where(users.c.vk_user_id == user_id)
             conn.execute(sql)
             return True

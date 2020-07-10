@@ -4,7 +4,7 @@ import telegram_integration
 import vk_integration
 
 
-def start_server():
+def main():
     thread1 = threading.Thread(target=telegram_integration.TelegramBot,
                                args=(), name='Active Telegram')
     thread2 = threading.Thread(target=vk_integration.VKBot,
@@ -14,4 +14,4 @@ def start_server():
 
 
 if __name__ == '__main__':
-    start_server()
+    main()
