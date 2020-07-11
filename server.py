@@ -8,10 +8,11 @@ from sqlalchemy import create_engine, select, update, insert, exists, MetaData, 
 import tokens
 import msg_to_vk
 import msg_to_telegram
+import msg_to_slack
 
 
 engine = create_engine(f'postgresql://postgres:'
-                       f'{tokens.passwd_postgres}@localhost:5432/db_bots', echo=False)
+                       f'{tokens.PASSWORD_POSTGRES}@localhost:5432/db_bots', echo=False)
 
 metadata = MetaData(engine)
 
@@ -46,13 +47,10 @@ def db_set_state(user_id, messanger_id, state):
 
 # Создание новой записи в базе данных, если пользователь пишет из телеграма.
 def new_account_telegram(user_id):
-    # Прежде чем добавить пользователя нужно сделать проверку на его наличие в БД,
-    # если его там нет то создаем новую запись.
     with engine.connect() as conn:
         sql = select([users.c.telegram_user_id]).where(users.c.telegram_user_id == user_id)
         result = conn.execute(sql)
         result1 = result.fetchone()[0]
-
     if result1 is None:
         with engine.connect() as conn:
             sql = insert(users).values({'telegram_user_id': user_id})
@@ -60,14 +58,11 @@ def new_account_telegram(user_id):
 
 # Создание новой записи в базе данных, если пользователь пишет из vk.
 def new_account_vk(user_id):
-    # Прежде чем добавить пользователя нужно сделать проверку на его наличие в БД,
-    # если его там нет то создаем новую запись.
     with engine.connect() as conn:
         sql = select([users.c.vk_user_id]).where(users.c.vk_user_id == user_id)
-        result = conn.execute(sql)
-        result1 = result.fetchone()[0]
-
-    if result1 is None:
+        get_sql = conn.execute(sql)
+        result = get_sql.fetchone()[0]
+    if result is None:
         with engine.connect() as conn:
             sql = insert(users).values({'vk_user_id': user_id})
             conn.execute(sql)
@@ -80,10 +75,7 @@ def get_vk_db(user_id, message):
         return True
 
 # Проверка в базе данных VK-id пользователя и отправка ответа на вопрос в VK.
-def check_vk_db(user_id, messanger_id):
-    # Если все ок, то отправляем сообщение и возвращаем True,
-    # если его айди нет, то возвращаем False
-    # cursor = db.cursor(buffered=True)
+def check_vk_id(user_id, messanger_id):
     if messanger_id == 1:
         with engine.connect() as conn:
             sql = select([users.c.vk_user_id]).where(users.c.telegram_user_id == user_id)
@@ -113,6 +105,61 @@ def check_vk_db(user_id, messanger_id):
                 msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
                 return True
 
+# Проверяет есть ли slack-id пользователя в базе данных.
+def check_slack_id(user_id, messanger_id):
+    if messanger_id == 1:
+        with engine.connect() as conn:
+            sql = select([users.c.slack_user_id]).where(users.c.telegram_user_id == user_id)
+            result = conn.execute(sql)
+            slack_id = result.fetchone()[0]
+            if slack_id is None:
+                return False
+            else:
+                send_to_slack(user_id, messanger_id, slack_id)
+                return True
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = select([users.c.slack_user_id]).where(users.c.vk_user_id == user_id)
+            result = conn.execute(sql)
+            slack_id = result.fetchone()[0]
+            if slack_id is None:
+                return False
+            else:
+                send_to_slack(user_id, messanger_id, slack_id)
+                return True
+
+# Заполняет поле slack-id в базе данных.
+def set_slack_id_to_db(user_id, messanger_id, slack_id):
+    if messanger_id == 1:
+        with engine.connect() as conn:
+            sql = update(users).values({'slack_user_id': slack_id}).where(users.c.telegram_user_id == user_id)
+            conn.execute(sql)
+            result = send_to_slack(user_id, messanger_id, slack_id)
+            return result
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = update(users).values({'slack_user_id': slack_id}).where(users.c.vk_user_id == user_id)
+            conn.execute(sql)
+            result = send_to_slack(user_id, messanger_id, slack_id)
+            return result
+
+# Отправка сообщения в slack, пользователю в direct.
+def send_to_slack(user_id, messanger_id, slack_id):
+    if messanger_id == 1:
+        with engine.connect() as conn:
+            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
+            result = conn.execute(sql)
+            answer = result.fetchone()[0]
+            msg_to_slack.send(slack_id, answer)
+            return True
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
+            result = conn.execute(sql)
+            answer = result.fetchone()[0]
+            msg_to_slack.send(slack_id, answer)
+            return True
+
 # Отправка письма на почту пользователя.
 def send_mail(user_id, messanger_id, mail):
     # cursor = db.cursor(buffered=True)
@@ -133,13 +180,13 @@ def send_mail(user_id, messanger_id, mail):
     # smtpObj.set_debuglevel(1) debug в консоль
     try:
         smtpObj.starttls()
-        smtpObj.login(tokens.main_mail, tokens.main_mail_psw)
-        smtpObj.sendmail(tokens.main_mail, mail, msg.as_string())
+        smtpObj.login(tokens.MAIN_MAIL, tokens.MAIN_MAIL_PSW)
+        smtpObj.sendmail(tokens.MAIN_MAIL, mail, msg.as_string())
         return True
     finally:
         smtpObj.quit()
 
-# Нахождение вопроса от пользователя в базе данных
+# Нахождение вопроса от пользователя в базе данных.
 def find_question(user_id, messanger_id, message):
     with engine.connect() as conn:
         sql = select([exists().where(ans_ques.c.question.like('%' + message + '%'))])
@@ -187,8 +234,7 @@ def send_answer_to_telegram(user_id, messanger_id):
                 msg_to_telegram.send(tel_id, answer)
                 return True
 
-
-# Запись оценки пользователя в базу данных
+# Запись оценки пользователя в базу данных.
 def get_feedback_db(user_id, messanger_id, mark):
     if messanger_id == 1:
         with engine.connect() as conn:

@@ -11,7 +11,7 @@ import user_states
 
 
 class VKBot(object):
-    vk_session = vk_api.VkApi(token=tokens.token_vk)
+    vk_session = vk_api.VkApi(token=tokens.TOKEN_VK)
     session_api = vk_session.get_api()
     longpoll = vk_api.longpoll.VkLongPoll(vk_session)
 
@@ -95,6 +95,10 @@ class VKBot(object):
                             self.message_sender(event.user_id,
                                                 'Вы еще не ввели свою почту')
                             self.get_location_mail(event.user_id, event.text)
+                        elif state == user_states.States.S_CHOOSE_LOC_SLACK.value:
+                            self.message_sender(event.user_id,
+                                                'Вы еще не ввели свой Slack-id')
+                            self.get_location_slack(event.user_id, event.text)
                         elif state == user_states.States.S_FEEDBACK.value:
                             self.message_sender(event.user_id,
                                                 'Вы еще не оставили отзыв об ответе')
@@ -119,6 +123,8 @@ class VKBot(object):
                         self.get_location(event.user_id, event.text)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC_MAIL.value:
                         self.get_location_mail(event.user_id, event.text)
+                    elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC_SLACK.value:
+                        self.get_location_slack(event.user_id, event.text)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_FEEDBACK.value:
                         self.get_feedback(event.user_id, event.text)
 
@@ -131,7 +137,7 @@ class VKBot(object):
 
     def get_location(self, user_id, text):
         if text.lower() == 'vk':
-            check_vk_id = server.check_vk_db(user_id, 2)
+            check_vk_id = server.check_vk_id(user_id, 2)
             if check_vk_id:
                 self.message_sender(user_id, 'Надеюсь мне удалось вам помочь, '
                                              'оцените полученный ответ от 1 до 5')
@@ -149,6 +155,20 @@ class VKBot(object):
                 server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
             else:
                 self.message_sender(user_id, 'Сообщение НЕ отправлено')
+        elif text.lower() == 'slack':
+            check_slack_id = server.check_slack_id(user_id, 2)
+            if check_slack_id:
+                self.message_sender(user_id, 'Сообщение отправлено в Slack')
+                self.message_sender(user_id,
+                                      'Надеюсь мне удалось вам помочь, '
+                                      'оцените полученный ответ от 1 до 5')
+                server.db_set_state(user_id, 2,
+                                    user_states.States.S_FEEDBACK.value)
+            else:
+                self.message_sender(user_id,
+                                      'Я не знаю ваш Slack-id, напишите его')
+                server.db_set_state(user_id, 2,
+                                    user_states.States.S_CHOOSE_LOC_SLACK.value)
         elif text.lower() == 'почта':
             self.message_sender(user_id, 'Пожалуйста напишите почту на которую хотите получить ответ')
             server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_MAIL.value)
@@ -169,6 +189,25 @@ class VKBot(object):
                 self.message_sender(user_id, 'Что-то пошло не так')
         else:
             self.message_sender(user_id, 'Введен неправильный адрес, попробуйте еще раз')
+
+    def get_location_slack(self, user_id, text):
+        if len(text) == 11:
+            slack_id_to_db = server.set_slack_id_to_db(user_id, 2, text)
+            if slack_id_to_db:
+                self.message_sender(user_id,
+                                    'Все верно, отправляю сообщение в Slack')
+                self.message_sender(user_id,
+                                    'Надеюсь мне удалось вам помочь, '
+                                    'оцените полученный ответ от 1 до 5')
+                server.db_set_state(user_id, 2,
+                                    user_states.States.S_FEEDBACK.value)
+            else:
+                self.message_sender(user_id, 'Что-то пошло не так')
+        else:
+            self.message_sender(user_id,
+                                'Slack-id - это 11-ти значная послдеовательность ' 
+                                'из заглавных латинских букв и цифр')
+            return
 
     def get_feedback(self, user_id, text):
         if not text.isdigit():

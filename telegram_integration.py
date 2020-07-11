@@ -8,7 +8,7 @@ import user_states
 
 
 class TelegramBot(object):
-    bot = telebot.TeleBot(tokens.token_telegram)
+    bot = telebot.TeleBot(tokens.TOKEN_TELEGRAM)
 
     def __init__(self):
         # /reset для сброса состояния пользователя.
@@ -51,6 +51,10 @@ class TelegramBot(object):
         @self.bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == user_states.States.S_CHOOSE_LOC_MAIL.value)
         def get_mail(message):
             self.get_mail(message)
+
+        @self.bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == user_states.States.S_CHOOSE_LOC_SLACK.value)
+        def get_slack(message):
+            self.get_slack(message)
 
         # Функция, которая просит пользователя дать оценку работы бота.
         @self.bot.message_handler(func=lambda message: server.db_get_state(message.chat.id, 1) == user_states.States.S_FEEDBACK.value)
@@ -97,6 +101,9 @@ class TelegramBot(object):
         elif state == user_states.States.S_CHOOSE_LOC_VK.value:
             self.bot.send_message(message.chat.id,
                                   'Вы еще не ввели VK-id')
+        elif state == user_states.States.S_CHOOSE_LOC_SLACK.value:
+            self.bot.send_message(message.chat.id,
+                                  'Вы еще не ввели Slack-id')
         elif state == user_states.States.S_CHOOSE_LOC_MAIL.value:
             self.bot.send_message(message.chat.id,
                                   'Вы еще не ввели свою почту')
@@ -122,7 +129,7 @@ class TelegramBot(object):
         detect = server.find_question(message.chat.id, 1, message.text)
         if detect:
             self.bot.send_message(message.chat.id, 'Ответ на заданный вопрос найден')
-            keyboard = self.generate_keyboard('VK', 'Telegram', 'Почта')
+            keyboard = self.generate_keyboard('VK', 'Telegram', 'Slack', 'Почта')
             self.bot.send_message(message.chat.id,
                                   'Куда вы хотите чтобы я вам ответил:',
                                    reply_markup=keyboard)
@@ -137,7 +144,7 @@ class TelegramBot(object):
 
     def send_answer(self, message):
         if message.text.lower() == 'vk':
-            check_vk_id = server.check_vk_db(message.chat.id, 1)
+            check_vk_id = server.check_vk_id(message.chat.id, 1)
             if check_vk_id:
                 self.bot.send_message(message.chat.id, 'Сообщение отправлено в VK')
                 self.bot.send_message(message.chat.id,
@@ -149,7 +156,7 @@ class TelegramBot(object):
                 self.bot.send_message(message.chat.id,
                                       'Я не знаю ваш VK-id напишите его, '
                                       'а также разрешите отправлять '
-                                      'мне сообщения в VK в диалоге ' + tokens.bot_vk_url)
+                                      'мне сообщения в VK в диалоге ' + tokens.BOT_VK_URL)
                 server.db_set_state(message.chat.id, 1,
                                     user_states.States.S_CHOOSE_LOC_VK.value)
         elif message.text.lower() == 'telegram':
@@ -160,6 +167,20 @@ class TelegramBot(object):
                                   'оцените полученный ответ от 1 до 5')
             server.db_set_state(message.chat.id, 1,
                                 user_states.States.S_FEEDBACK.value)
+        elif message.text.lower() == 'slack':
+            check_slack_id = server.check_slack_id(message.chat.id, 1)
+            if check_slack_id:
+                self.bot.send_message(message.chat.id, 'Сообщение отправлено в Slack')
+                self.bot.send_message(message.chat.id,
+                                      'Надеюсь мне удалось вам помочь, '
+                                      'оцените полученный ответ от 1 до 5')
+                server.db_set_state(message.chat.id, 1,
+                                    user_states.States.S_FEEDBACK.value)
+            else:
+                self.bot.send_message(message.chat.id,
+                                      'Я не знаю ваш Slack-id, напишите его')
+                server.db_set_state(message.chat.id, 1,
+                                    user_states.States.S_CHOOSE_LOC_SLACK.value)
         elif message.text.lower() == 'почта':
             self.bot.send_message(message.chat.id,
                                   'Пожалуйста напишите почту на которую хотите получить ответ')
@@ -167,7 +188,7 @@ class TelegramBot(object):
                                 user_states.States.S_CHOOSE_LOC_MAIL.value)
         else:
             self.bot.send_message(message.chat.id,
-                                  'Пожалуйста выберите куда хотите получить ответ: VK, Telegram, Mail')
+                                  'Пожалуйста выберите куда хотите получить ответ: VK, Telegram, Slack, Mail')
 
     def get_vk_id(self, message):
         if not message.text.isdigit():
@@ -180,7 +201,7 @@ class TelegramBot(object):
         else:
             vk_id_to_db = server.get_vk_db(message.text, message.chat.id)
             if vk_id_to_db:
-                check_vk_id = server.check_vk_db(message.chat.id, 1)
+                check_vk_id = server.check_vk_id(message.chat.id, 1)
                 if check_vk_id:
                     self.bot.send_message(message.chat.id,
                                           'Все верно, отправляю сообщение в VK')
@@ -212,6 +233,25 @@ class TelegramBot(object):
         else:
             self.bot.send_message(message.chat.id, 'Введен неправильный адрес,'
                                                    ' попробуйте еще раз')
+
+    def get_slack(self, message):
+        if len(message.text) == 11:
+            slack_id_of_db = server.set_slack_id_to_db(message.chat.id, 1, message.text)
+            if slack_id_of_db:
+                self.bot.send_message(message.chat.id,
+                                      'Все верно, отправляю сообщение в Slack')
+                self.bot.send_message(message.chat.id,
+                                      'Надеюсь мне удалось вам помочь, '
+                                      'оцените полученный ответ от 1 до 5')
+                server.db_set_state(message.chat.id, 1,
+                                    user_states.States.S_FEEDBACK.value)
+            else:
+                self.bot.send_message(message.chat.id, 'Что-то пошло не так')
+        else:
+            self.bot.send_message(message.chat.id,
+                                  'Slack-id - это 11-ти значная послдеовательность ' 
+                                  'из заглавных латинских букв и цифр')
+            return
 
     def get_feedback(self, message):
         if not message.text.isdigit():
