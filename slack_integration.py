@@ -8,7 +8,7 @@ class SlackBot(object):
 
 	@classmethod
 	def main(cls, user_id, message):
-		cls.slack_connect.chat.post_message(user_id, 'Ответ на заданный вопрос: ' + message)
+		cls.slack_connect.chat.post_message(user_id, f'Ответ на заданный вопрос: {message}')
 
 
 # if __name__ == '__main__':

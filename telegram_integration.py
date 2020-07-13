@@ -11,6 +11,7 @@ class TelegramBot(object):
     bot = telebot.TeleBot(tokens.TOKEN_TELEGRAM)
 
     def __init__(self):
+
         # /reset для сброса состояния пользователя.
         @self.bot.message_handler(commands=['reset'])
         def reset_state(message):
@@ -154,14 +155,14 @@ class TelegramBot(object):
                                     user_states.States.S_FEEDBACK.value)
             else:
                 self.bot.send_message(message.chat.id,
-                                      'Я не знаю ваш VK-id напишите его, '
-                                      'а также разрешите отправлять '
-                                      'мне сообщения в VK в диалоге ' + tokens.BOT_VK_URL)
+                                      f'Я не знаю ваш VK-id напишите его, '
+                                      f'а также разрешите отправлять '
+                                      f'мне сообщения в VK в диалоге {tokens.BOT_VK_URL}')
                 server.db_set_state(message.chat.id, 1,
                                     user_states.States.S_CHOOSE_LOC_VK.value)
         elif message.text.lower() == 'telegram':
             answer = server.send_answer_to_telegram(message.chat.id, 1)
-            self.bot.send_message(message.chat.id, 'Ответ на заданный вопрос: ' + answer)
+            self.bot.send_message(message.chat.id, f'Ответ на заданный вопрос: {answer}')
             self.bot.send_message(message.chat.id,
                                   'Надеюсь мне удалось вам помочь, '
                                   'оцените полученный ответ от 1 до 5')
@@ -269,4 +270,5 @@ class TelegramBot(object):
                                     user_states.States.S_QUESTION.value)
             else:
                 self.bot.send_message(message.chat.id, 'Что-то пошло не так 3')
+
 

@@ -95,14 +95,14 @@ def check_vk_id(user_id, messanger_id):
                 sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
                 result = conn.execute(sql)
                 answer = result.fetchone()[0]
-                msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
+                msg_to_vk.send(check_vk_id, f'Ответ на заданный вопрос: {answer}')
                 return True
         if messanger_id == 2:
             with engine.connect() as conn:
                 sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
                 result = conn.execute(sql)
                 answer = result.fetchone()[0]
-                msg_to_vk.send(check_vk_id, 'Ответ на заданный вопрос: ' + answer)
+                msg_to_vk.send(check_vk_id, f'Ответ на заданный вопрос: {answer}')
                 return True
 
 # Проверяет есть ли slack-id пользователя в базе данных.
@@ -189,7 +189,7 @@ def send_mail(user_id, messanger_id, mail):
 # Нахождение вопроса от пользователя в базе данных.
 def find_question(user_id, messanger_id, message):
     with engine.connect() as conn:
-        sql = select([exists().where(ans_ques.c.question.like('%' + message + '%'))])
+        sql = select([exists().where(ans_ques.c.question.like(f'%{message}%'))])
         result = conn.execute(sql)
         result1 = int(result.fetchone()[0])
     if result1 == 1:

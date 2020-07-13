@@ -16,7 +16,8 @@ class VKBot(object):
     longpoll = vk_api.longpoll.VkLongPoll(vk_session)
 
     def __init__(self):
-        self._COMMANDS = ['/start', '/help', '/reset', ]
+        self.LIST_HELP = ['/start', '/help', '/reset', ]
+        self.LIST_LOCATION = ['VK', 'Telegram', 'Slack', 'Почта', ]
         self.vk_start()
 
     @classmethod
@@ -24,48 +25,11 @@ class VKBot(object):
         cls.vk_session.method('messages.send', {'user_id': id, 'message': text,
                                                 'random_id': 0, 'keyboard': keyboard})
 
-    @classmethod
-    def generate_keyboard(cls, *answer):
+    def get_keyboard(self, buttons):
         keyboard = VkKeyboard(one_time=True)
-        for item in answer:
+        for item in buttons:
             keyboard.add_button(item, color=VkKeyboardColor.DEFAULT)
         return keyboard.get_keyboard()
-
-    def get_button(label, color, payload=''):
-        return {
-            'action': {
-                'type': 'text',
-                'payload': json.dumps(payload),
-                'label': label
-            },
-            'color': color
-        }
-
-    keyboard = {
-        'one_time': True,
-        'buttons': [
-            [get_button(label='/start', color='default'),
-             get_button(label='/help', color='default'),
-             get_button(label='/reset', color='default')
-             ]
-        ]
-    }
-
-    keyboard_help = json.dumps(keyboard, ensure_ascii=False).encode('utf-8')
-    keyboard_help = str(keyboard_help.decode('utf-8'))
-
-    keyboard = {
-        'one_time': True,
-        'buttons': [
-            [get_button(label='VK', color='default'),
-             get_button(label='Telegram', color='default'),
-             get_button(label='Почта', color='default')
-             ]
-        ]
-    }
-
-    keyboard_loc = json.dumps(keyboard, ensure_ascii=False).encode('utf-8')
-    keyboard_loc = str(keyboard_loc.decode('utf-8'))
 
     def vk_start(self):
         for event in self.longpoll.listen():
@@ -73,7 +37,7 @@ class VKBot(object):
                 if event.to_me:
                     msg = event.text.lower()
                     id = event.user_id
-                    if msg == self._COMMANDS[0]:
+                    if msg == self.LIST_HELP[0]:
                         server.new_account_vk(event.user_id)
                         state = server.db_get_state(event.user_id, 2)
                         if state == user_states.States.S_START.value:
@@ -109,13 +73,15 @@ class VKBot(object):
                                                 'Для вызова всех команд используйте /help')
                             server.db_set_state(event.user_id, 2,
                                                 user_states.States.S_QUESTION.value)
-                    elif msg == self._COMMANDS[1]:
+                    elif msg == self.LIST_HELP[1]:
+                        keyboard = self.get_keyboard(self.LIST_HELP)
                         self.message_sender(event.user_id,
                                             '1. /start - начало работы \n'
                                             '2. /help - помощь по командам \n'
                                             '3. /reset - сброс вопроса \n'
-                                            'Выберите команду:', self.keyboard_help)
-                    elif msg == self._COMMANDS[2]:
+                                            'Выберите команду:', keyboard)
+
+                    elif msg == self.LIST_HELP[2]:
                         self.message_sender(id, 'Приветствую')
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_QUESTION.value:
                         self.get_question(event.user_id, event.text)
@@ -131,7 +97,8 @@ class VKBot(object):
     def get_question(self, user_id, text):
         detect = server.find_question(user_id, 2, text)
         if detect:
-            self.message_sender(user_id, 'Ответ на заданный вопрос найден', self.keyboard_loc)
+            keyboard = self.get_keyboard(self.LIST_LOCATION)
+            self.message_sender(user_id, 'Ответ на заданный вопрос найден', keyboard)
             self.message_sender(user_id, 'Куда вы хотите чтобы я вам ответил:',)
             server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC.value)
 
@@ -220,7 +187,7 @@ class VKBot(object):
             result_feedback = server.get_feedback_db(user_id, 2, text)
             if result_feedback:
                 self.message_sender(user_id, 'Спасибо за ваш отзыв, можете'
-                                                       ' задавать следующий вопрос')
+                                             ' задавать следующий вопрос')
                 server.db_set_state(user_id, 2,
                                     user_states.States.S_QUESTION.value)
             else:
