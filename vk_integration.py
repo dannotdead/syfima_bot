@@ -80,13 +80,15 @@ class VKBot(object):
                                             '2. /help - помощь по командам \n'
                                             '3. /reset - сброс вопроса \n'
                                             'Выберите команду:', keyboard)
-
                     elif msg == self.LIST_HELP[2]:
-                        self.message_sender(id, 'Приветствую')
+                        self.message_sender(event.user_id, 'Задайте новый вопрос')
+                        server.db_set_state(event.user_id, 1, user_states.States.S_QUESTION.value)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_QUESTION.value:
                         self.get_question(event.user_id, event.text)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC.value:
                         self.get_location(event.user_id, event.text)
+                    elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC_TELEGRAM.value:
+                        self.get_location_telegram(event.user_id, event.text)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC_MAIL.value:
                         self.get_location_mail(event.user_id, event.text)
                     elif msg and server.db_get_state(event.user_id, 2) == user_states.States.S_CHOOSE_LOC_SLACK.value:
@@ -114,14 +116,21 @@ class VKBot(object):
                 self.message_sender(user_id, 'Что-то пошло не так')
                 server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_VK.value)
         elif text.lower() == 'telegram':
-            answer = server.send_answer_to_telegram(user_id, 2)
-            if answer:
-                self.message_sender(user_id, 'Сообщение отправлено')
-                self.message_sender(user_id, 'Надеюсь мне удалось вам помочь, '
-                                             'оцените полученный ответ от 1 до 5')
-                server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
+            telegram_username = server.check_telegram_username(user_id)
+            if telegram_username:
+                answer = server.send_answer_to_telegram(user_id, 2)
+                if answer:
+                    self.message_sender(user_id, 'Сообщение отправлено')
+                    self.message_sender(user_id, 'Надеюсь мне удалось вам помочь, '
+                                                 'оцените полученный ответ от 1 до 5')
+                    server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
+                else:
+                    self.message_sender(user_id, 'Сообщение НЕ отправлено')
             else:
-                self.message_sender(user_id, 'Сообщение НЕ отправлено')
+                url = '@syfimaBot'
+                self.message_sender(user_id, f'Введите свое имя пользователя телеграма'
+                                             f' и напишите боту {url} /start в телеграме')
+                server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_TELEGRAM.value)
         elif text.lower() == 'slack':
             check_slack_id = server.check_slack_id(user_id, 2)
             if check_slack_id:
@@ -139,6 +148,15 @@ class VKBot(object):
         elif text.lower() == 'почта':
             self.message_sender(user_id, 'Пожалуйста напишите почту на которую хотите получить ответ')
             server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_MAIL.value)
+
+    def get_location_telegram(self, user_id, text):
+        username = server.set_telegram_username(user_id, text)
+        if username:
+            self.message_sender(user_id, 'Напишите мне в телеграме, '
+                                         'чтобы я смог отправить сообщение '
+                                         'и повторите попытку')
+            server.db_set_state(user_id, 2,
+                                user_states.States.S_CHOOSE_LOC.value)
 
     def get_location_mail(self, user_id, text):
         pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')

@@ -45,16 +45,45 @@ def db_set_state(user_id, messanger_id, state):
             sql = update(users).values({'state': state}).where(users.c.vk_user_id == user_id)
             conn.execute(sql)
 
+# Проверка username-telegram пользователя в бд.
+def check_telegram_username(user_id):
+    with engine.connect() as conn:
+        sql = select([users.c.telegram_username]).where(users.c.vk_user_id == user_id)
+        result = conn.execute(sql)
+        username = result.fetchone()[0]
+    if username is None:
+        return False
+    else:
+        return True
+
 # Создание новой записи в базе данных, если пользователь пишет из телеграма.
-def new_account_telegram(user_id):
+def new_account_telegram(user_id, username):
     with engine.connect() as conn:
         sql = select([users.c.telegram_user_id]).where(users.c.telegram_user_id == user_id)
+        sql_name = select([users.c.telegram_username]).where(users.c.telegram_username == username)
         result = conn.execute(sql)
-        result1 = result.fetchone()[0]
-    if result1 is None:
+        result1 = conn.execute(sql_name)
+        result2 = result.fetchone()
+        result3 = result1.fetchone()
+    if result2 is None and result3 is None:
         with engine.connect() as conn:
-            sql = insert(users).values({'telegram_user_id': user_id})
+            sql = insert(users).values({'telegram_user_id': user_id, 'telegram_username': username})
             conn.execute(sql)
+    elif result2 is None:
+        with engine.connect() as conn:
+            sql = update(users).values({'telegram_user_id': user_id}).where(users.c.telegram_username == username)
+            conn.execute(sql)
+    elif result3 is None:
+        with engine.connect() as conn:
+            sql = update(users).values({'telegram_username': username}).where(users.c.telegram_user_id == user_id)
+            conn.execute(sql)
+
+# Установка username-telegram из vk.
+def set_telegram_username(user_id, username):
+    with engine.connect() as conn:
+        sql = update(users).values({'telegram_username': username}).where(users.c.vk_user_id == user_id)
+        conn.execute(sql)
+        return True
 
 # Создание новой записи в базе данных, если пользователь пишет из vk.
 def new_account_vk(user_id):

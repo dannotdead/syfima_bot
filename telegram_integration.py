@@ -87,7 +87,8 @@ class TelegramBot(object):
         self.bot.send_message(message.chat.id, 'Вызовите команду /start')
 
     def send_welcome(self, message):
-        server.new_account_telegram(message.chat.id)
+        # print(message)
+        server.new_account_telegram(message.chat.id, message.chat.username)
         state = server.db_get_state(message.chat.id, 1)
         if state == user_states.States.S_START.value:
             self.bot.send_message(message.chat.id, 'Задайте новый вопрос')
