@@ -6,9 +6,10 @@ from email.header import Header
 from sqlalchemy import create_engine, select, update, insert, exists, MetaData, Table
 
 import tokens
-import msg_to_vk
-import msg_to_telegram
-import msg_to_slack
+from messages_to import msg_to_vk
+from messages_to import msg_to_telegram
+from messages_to import msg_to_slack
+from standing.constants import *
 
 
 engine = create_engine(f'postgresql://postgres:'
@@ -18,6 +19,7 @@ metadata = MetaData(engine)
 
 users = Table('users', metadata, autoload=True)
 ans_ques = Table('ans_ques', metadata, autoload=True)
+states = Table('states', metadata, autoload=True)
 
 # Получение состояния у пользователя.
 def db_get_state(user_id, messanger_id):
@@ -44,6 +46,13 @@ def db_set_state(user_id, messanger_id, state):
         with engine.connect() as conn:
             sql = update(users).values({'state': state}).where(users.c.vk_user_id == user_id)
             conn.execute(sql)
+
+def state_start(state):
+    with engine.connect() as conn:
+        sql = select([states.c.description]).where(states.c.state == state)
+        result = conn.execute(sql)
+        description = result.fetchone()[0]
+        return description
 
 # Проверка username-telegram пользователя в бд.
 def check_telegram_username(user_id):
@@ -97,7 +106,7 @@ def new_account_vk(user_id):
             conn.execute(sql)
 
 # Запись нового VK-id, если telegram уже существует.
-def get_vk_db(user_id, message):
+def set_vk_db(user_id, message):
     with engine.connect() as conn:
         sql = update(users).values({'vk_user_id': user_id}).where(users.c.telegram_user_id == message)
         conn.execute(sql)
@@ -119,20 +128,24 @@ def check_vk_id(user_id, messanger_id):
     if check_vk_id == 0 or check_vk_id is None:
         return False
     else:
-        if messanger_id == 1:
-            with engine.connect() as conn:
-                sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-                result = conn.execute(sql)
-                answer = result.fetchone()[0]
-                msg_to_vk.send(check_vk_id, f'Ответ на заданный вопрос: {answer}')
-                return True
-        if messanger_id == 2:
-            with engine.connect() as conn:
-                sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
-                result = conn.execute(sql)
-                answer = result.fetchone()[0]
-                msg_to_vk.send(check_vk_id, f'Ответ на заданный вопрос: {answer}')
-                return True
+        success = _message_to_vk(user_id, messanger_id, check_vk_id)
+        return success
+
+def _message_to_vk(user_id, messanger_id, vk_id):
+    if messanger_id == 1:
+        with engine.connect() as conn:
+            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
+            result = conn.execute(sql)
+            answer = result.fetchone()[0]
+            msg_to_vk.send(vk_id, f'{REPLY} {answer}')
+            return True
+    if messanger_id == 2:
+        with engine.connect() as conn:
+            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
+            result = conn.execute(sql)
+            answer = result.fetchone()[0]
+            msg_to_vk.send(vk_id, f'{REPLY} {answer}')
+            return True
 
 # Проверяет есть ли slack-id пользователя в базе данных.
 def check_slack_id(user_id, messanger_id):
@@ -249,7 +262,7 @@ def send_answer_to_telegram(user_id, messanger_id):
         if answer is not None:
             return answer
         else:
-            return 'Не найдено'
+            return FAULT
     if messanger_id == 2:
         with engine.connect() as conn:
             sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)

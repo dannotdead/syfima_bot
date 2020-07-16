@@ -1,5 +1,4 @@
-﻿import vk_integration
-
+﻿from bots import vk_integration
 
 # Вызывает функцию отправки сообщения в VK.
 def send(vk_id, message):

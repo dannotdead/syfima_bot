@@ -1,8 +1,8 @@
 ﻿import threading
 
-import telegram_integration
-import vk_integration
-import slack_integration
+from bots import slack_integration
+from bots import telegram_integration
+from bots import vk_integration
 
 
 def main():

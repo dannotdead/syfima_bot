@@ -1,5 +1,4 @@
-import telegram_integration
-
+from bots import telegram_integration
 
 # Вызывает функцию отправки сообщения в VK.
 def send(telegram_id, message):
