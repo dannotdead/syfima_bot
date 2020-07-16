@@ -3,63 +3,38 @@ import smtplib
 import psycopg2
 from email.mime.text import MIMEText
 from email.header import Header
-from sqlalchemy import create_engine, select, update, insert, exists, MetaData, Table
+from sqlalchemy import select, update, insert, exists
 
-import tokens
 from messages_to import msg_to_vk
 from messages_to import msg_to_telegram
 from messages_to import msg_to_slack
 from standing.constants import *
 
 
-engine = create_engine(f'postgresql://postgres:'
-                       f'{tokens.PASSWORD_POSTGRES}@localhost:5432/db_bots', echo=False)
-
-metadata = MetaData(engine)
-
-users = Table('users', metadata, autoload=True)
-ans_ques = Table('ans_ques', metadata, autoload=True)
-states = Table('states', metadata, autoload=True)
-
 # Получение состояния у пользователя.
 def db_get_state(user_id, messanger_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.state]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            current_state = result.fetchone()[0]
-            return current_state
+        current_state = select_column(USERS_STATE, USERS_TELEGRAM_USER_ID, user_id)
+        return current_state
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.state]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            current_state = result.fetchone()[0]
-            return current_state
+        current_state = select_column(USERS_STATE, USERS_VK_USER_ID, user_id)
+        return current_state
 
 # Запись состояния для пользователя.
 def db_set_state(user_id, messanger_id, state):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = update(users).values({'state': state}).where(users.c.telegram_user_id == user_id)
-            conn.execute(sql)
+        update_column(users, {STATE: state}, USERS_TELEGRAM_USER_ID, user_id)
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = update(users).values({'state': state}).where(users.c.vk_user_id == user_id)
-            conn.execute(sql)
+        update_column(users, {STATE: state}, USERS_VK_USER_ID, user_id)
 
+# Выбирает описание состояния по текущему состоянию при вызове /start.
 def state_start(state):
-    with engine.connect() as conn:
-        sql = select([states.c.description]).where(states.c.state == state)
-        result = conn.execute(sql)
-        description = result.fetchone()[0]
-        return description
+    description = select_column(STATES_DESCRIPTION, STATES_STATE, state)
+    return description
 
 # Проверка username-telegram пользователя в бд.
 def check_telegram_username(user_id):
-    with engine.connect() as conn:
-        sql = select([users.c.telegram_username]).where(users.c.vk_user_id == user_id)
-        result = conn.execute(sql)
-        username = result.fetchone()[0]
+    username = select_column(USERS_TELEGRAM_USERNAME, USERS_VK_USER_ID, user_id)
     if username is None:
         return False
     else:
@@ -68,153 +43,94 @@ def check_telegram_username(user_id):
 # Создание новой записи в базе данных, если пользователь пишет из телеграма.
 def new_account_telegram(user_id, username):
     with engine.connect() as conn:
-        sql = select([users.c.telegram_user_id]).where(users.c.telegram_user_id == user_id)
-        sql_name = select([users.c.telegram_username]).where(users.c.telegram_username == username)
+        sql = select([USERS_TELEGRAM_USER_ID]).where(USERS_TELEGRAM_USER_ID == user_id)
+        sql_name = select([USERS_TELEGRAM_USERNAME]).where(USERS_TELEGRAM_USERNAME == username)
         result = conn.execute(sql)
         result1 = conn.execute(sql_name)
-        result2 = result.fetchone()
-        result3 = result1.fetchone()
-    if result2 is None and result3 is None:
-        with engine.connect() as conn:
-            sql = insert(users).values({'telegram_user_id': user_id, 'telegram_username': username})
-            conn.execute(sql)
-    elif result2 is None:
-        with engine.connect() as conn:
-            sql = update(users).values({'telegram_user_id': user_id}).where(users.c.telegram_username == username)
-            conn.execute(sql)
-    elif result3 is None:
-        with engine.connect() as conn:
-            sql = update(users).values({'telegram_username': username}).where(users.c.telegram_user_id == user_id)
-            conn.execute(sql)
+        telegram_user_id = result.fetchone()
+        telegram_username = result1.fetchone()
+    if telegram_user_id is None and telegram_username is None:
+        insert_column(users, {TELEGRAM_USER_ID: user_id, TELEGRAM_USERNAME: username})
+    elif telegram_user_id is None:
+        update_column(users, {TELEGRAM_USER_ID: user_id}, USERS_TELEGRAM_USERNAME, username)
 
 # Установка username-telegram из vk.
 def set_telegram_username(user_id, username):
-    with engine.connect() as conn:
-        sql = update(users).values({'telegram_username': username}).where(users.c.vk_user_id == user_id)
-        conn.execute(sql)
-        return True
+    update_column(users, {TELEGRAM_USERNAME: username}, USERS_VK_USER_ID, user_id)
+    return True
 
 # Создание новой записи в базе данных, если пользователь пишет из vk.
 def new_account_vk(user_id):
-    with engine.connect() as conn:
-        sql = select([users.c.vk_user_id]).where(users.c.vk_user_id == user_id)
-        get_sql = conn.execute(sql)
-        result = get_sql.fetchone()[0]
-    if result is None:
-        with engine.connect() as conn:
-            sql = insert(users).values({'vk_user_id': user_id})
-            conn.execute(sql)
+    vk_user_id = select_column(USERS_VK_USER_ID, USERS_VK_USER_ID, user_id)
+    if vk_user_id is None:
+        insert_column(users, {VK_USER_ID: user_id})
 
 # Запись нового VK-id, если telegram уже существует.
-def set_vk_db(user_id, message):
-    with engine.connect() as conn:
-        sql = update(users).values({'vk_user_id': user_id}).where(users.c.telegram_user_id == message)
-        conn.execute(sql)
-        return True
+def set_vk_db(message, user_id):
+    update_column(users, {VK_USER_ID: message}, USERS_TELEGRAM_USER_ID, user_id)
+    return True
 
 # Проверка в базе данных VK-id пользователя и отправка ответа на вопрос в VK.
 def check_vk_id(user_id, messanger_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.vk_user_id]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            check_vk_id = result.fetchone()[0]
+        check_vk_id = select_column(USERS_VK_USER_ID, USERS_TELEGRAM_USER_ID, user_id)
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.vk_user_id]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            check_vk_id = result.fetchone()[0]
+        check_vk_id = select_column(USERS_VK_USER_ID, USERS_VK_USER_ID, user_id)
 
     if check_vk_id == 0 or check_vk_id is None:
         return False
     else:
-        success = _message_to_vk(user_id, messanger_id, check_vk_id)
-        return success
+        _message_to_vk(user_id, messanger_id, check_vk_id)
+        return True
 
+# Отправка ответа в VK.
 def _message_to_vk(user_id, messanger_id, vk_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-            msg_to_vk.send(vk_id, f'{REPLY} {answer}')
-            return True
+        answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
+        msg_to_vk.send(vk_id, REPLY + answer)
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-            msg_to_vk.send(vk_id, f'{REPLY} {answer}')
-            return True
+        answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
+        msg_to_vk.send(vk_id, REPLY + answer)
 
 # Проверяет есть ли slack-id пользователя в базе данных.
 def check_slack_id(user_id, messanger_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.slack_user_id]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            slack_id = result.fetchone()[0]
-            if slack_id is None:
-                return False
-            else:
-                send_to_slack(user_id, messanger_id, slack_id)
-                return True
+        slack_id = select_column(USERS_SLACK_USER_ID, USERS_TELEGRAM_USER_ID, user_id)
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.slack_user_id]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            slack_id = result.fetchone()[0]
-            if slack_id is None:
-                return False
-            else:
-                send_to_slack(user_id, messanger_id, slack_id)
-                return True
+        slack_id = select_column(USERS_SLACK_USER_ID, USERS_VK_USER_ID, user_id)
+
+    if slack_id is None:
+        return False
+    else:
+        send_to_slack(user_id, messanger_id, slack_id)
+        return True
 
 # Заполняет поле slack-id в базе данных.
 def set_slack_id_to_db(user_id, messanger_id, slack_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = update(users).values({'slack_user_id': slack_id}).where(users.c.telegram_user_id == user_id)
-            conn.execute(sql)
-            result = send_to_slack(user_id, messanger_id, slack_id)
-            return result
+        update_column(users, {SLACK_USER_ID: slack_id}, USERS_TELEGRAM_USER_ID, user_id)
+        send_to_slack(user_id, messanger_id, slack_id)
+        return True
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = update(users).values({'slack_user_id': slack_id}).where(users.c.vk_user_id == user_id)
-            conn.execute(sql)
-            result = send_to_slack(user_id, messanger_id, slack_id)
-            return result
+        update_column(users, {SLACK_USER_ID: slack_id}, USERS_VK_USER_ID, user_id)
+        send_to_slack(user_id, messanger_id, slack_id)
+        return True
 
 # Отправка сообщения в slack, пользователю в direct.
 def send_to_slack(user_id, messanger_id, slack_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-            msg_to_slack.send(slack_id, answer)
-            return True
+        answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
+        msg_to_slack.send(slack_id, answer)
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-            msg_to_slack.send(slack_id, answer)
-            return True
+        answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
+        msg_to_slack.send(slack_id, answer)
 
 # Отправка письма на почту пользователя.
 def send_mail(user_id, messanger_id, mail):
-    # cursor = db.cursor(buffered=True)
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
-    elif messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
+        answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
+    if messanger_id == 2:
+        answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
     text = str(answer)
     msg = MIMEText(text.encode('utf-8'), 'plain', 'utf-8')
     msg['Subject'] = Header('msg_from_bot', 'utf-8')
@@ -233,58 +149,58 @@ def find_question(user_id, messanger_id, message):
     with engine.connect() as conn:
         sql = select([exists().where(ans_ques.c.question.like(f'%{message}%'))])
         result = conn.execute(sql)
-        result1 = int(result.fetchone()[0])
-    if result1 == 1:
-        with engine.connect() as conn:
-            sql = select([ans_ques.c.answer]).where(ans_ques.c.question == message)
-            answer = conn.execute(sql)
-            answer1 = answer.fetchone()[0]
+        output = int(result.fetchone()[0])
+    if output == 1:
+        answer = select_column(ANS_QUES_ANSWER, ANS_QUES_QUESTION, message)
         if messanger_id == 1:
-            with engine.connect() as conn:
-                sql = update(users).values({'answers': answer1}).where(users.c.telegram_user_id == user_id)
-                conn.execute(sql)
-                return True
+            update_column(users, {ANSWERS: answer}, USERS_TELEGRAM_USER_ID, user_id)
+            return True
         if messanger_id == 2:
-            with engine.connect() as conn:
-                sql = update(users).values({'answers': answer1}).where(users.c.vk_user_id == user_id)
-                conn.execute(sql)
-                return True
+            update_column(users, {ANSWERS: answer}, USERS_VK_USER_ID, user_id)
+            return True
     else:
         return False
 
 # Отправка ответа на вопрос от пользователя в telegram.
 def send_answer_to_telegram(user_id, messanger_id):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.telegram_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
+        answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
         if answer is not None:
             return answer
         else:
             return FAULT
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = select([users.c.answers]).where(users.c.vk_user_id == user_id)
-            result = conn.execute(sql)
-            answer = result.fetchone()[0]
+        answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
         if answer is not None:
-            with engine.connect() as conn:
-                sql = select([users.c.telegram_user_id]).where(users.c.vk_user_id == user_id)
-                result = conn.execute(sql)
-                tel_id = result.fetchone()[0]
-                msg_to_telegram.send(tel_id, answer)
-                return True
+            tel_id = select_column(USERS_TELEGRAM_USER_ID, USERS_VK_USER_ID, user_id)
+            msg_to_telegram.send(tel_id, answer)
+            return True
 
 # Запись оценки пользователя в базу данных.
 def get_feedback_db(user_id, messanger_id, mark):
     if messanger_id == 1:
-        with engine.connect() as conn:
-            sql = update(users).values({'user_mark': mark}).where(users.c.telegram_user_id == user_id)
-            conn.execute(sql)
-            return True
+        update_column(users, {USER_MARK: mark}, USERS_TELEGRAM_USER_ID, user_id)
+        return True
     if messanger_id == 2:
-        with engine.connect() as conn:
-            sql = update(users).values({'user_mark': mark}).where(users.c.vk_user_id == user_id)
-            conn.execute(sql)
-            return True
+        update_column(users, {USER_MARK: mark}, USERS_VK_USER_ID, user_id)
+        return True
+
+# Получить содержимое колонки.
+def select_column(search, search_term, condition):
+    with engine.connect() as conn:
+        sql = select([search]).where(search_term == condition)
+        result = conn.execute(sql)
+        output = result.fetchone()[0]
+        return output
+
+# Обновить содержимое колонки.
+def update_column(table, value, search_term, condition):
+    with engine.connect() as conn:
+        sql = update(table).values(value).where(search_term == condition)
+        conn.execute(sql)
+
+# Вставить в таблицу значение.
+def insert_column(table, value):
+    with engine.connect() as conn:
+        sql = insert(table).values(value)
+        conn.execute(sql)

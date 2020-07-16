@@ -1,2 +1,2 @@
-# siyfima_bot
+# syfima_bot
 chat-bot

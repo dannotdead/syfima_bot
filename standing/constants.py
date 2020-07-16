@@ -1,5 +1,37 @@
 import tokens
 
+from sqlalchemy import create_engine, MetaData, Table
+
+
+engine = create_engine(f'postgresql://postgres:'
+                       f'{tokens.PASSWORD_POSTGRES}@localhost:5432/db_bots', echo=False)
+
+metadata = MetaData(engine)
+
+users = Table('users', metadata, autoload=True)
+ans_ques = Table('ans_ques', metadata, autoload=True)
+states = Table('states', metadata, autoload=True)
+
+USERS_STATE = users.c.state
+USERS_TELEGRAM_USER_ID = users.c.telegram_user_id
+USERS_TELEGRAM_USERNAME = users.c.telegram_username
+USERS_VK_USER_ID = users.c.vk_user_id
+USERS_SLACK_USER_ID = users.c.slack_user_id
+USERS_ANSWERS = users.c.answers
+
+ANS_QUES_ANSWER = ans_ques.c.answer
+ANS_QUES_QUESTION = ans_ques.c.question
+
+STATES_STATE = states.c.state
+STATES_DESCRIPTION = states.c.description
+
+STATE = 'state'
+TELEGRAM_USER_ID = 'telegram_user_id'
+TELEGRAM_USERNAME = 'telegram_username'
+VK_USER_ID = 'vk_user_id'
+SLACK_USER_ID = 'slack_user_id'
+ANSWERS = 'answers'
+USER_MARK = 'user_mark'
 
 START = 'start'
 HELP = 'help'
@@ -37,3 +69,6 @@ WRONG_MARK = 'Неверная оценка'
 FAULT = 'Что-то пошло не так'
 
 FEEDBACK = 'Спасибо за ваш отзыв, можете задавать следующий вопрос'
+
+
+
