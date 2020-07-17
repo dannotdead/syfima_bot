@@ -149,7 +149,6 @@ class TelegramBot(object):
                     server.db_set_state(message.chat.id, 1,
                                         user_states.States.S_FEEDBACK.value)
                 else:
-                    # Вынести в метод которые будет выводить сообщение о ошибке
                     self.message_sender(message, FAULT)
             else:
                 self.message_sender(message, FAULT)
