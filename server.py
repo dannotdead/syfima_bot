@@ -15,10 +15,9 @@ from standing.constants import *
 def db_get_state(user_id, messanger_id):
     if messanger_id == MES_TELEGRAM:
         current_state = select_column(USERS_STATE, USERS_TELEGRAM_USER_ID, user_id)
-        return current_state
     if messanger_id == MES_VK:
         current_state = select_column(USERS_STATE, USERS_VK_USER_ID, user_id)
-        return current_state
+    return current_state
 
 # Запись состояния для пользователя.
 def db_set_state(user_id, messanger_id, state):
@@ -110,11 +109,10 @@ def set_slack_id_to_db(user_id, messanger_id, slack_id):
     if messanger_id == MES_TELEGRAM:
         update_column(users, {SLACK_USER_ID: slack_id}, USERS_TELEGRAM_USER_ID, user_id)
         send_to_slack(user_id, messanger_id, slack_id)
-        return True
     if messanger_id == MES_VK:
         update_column(users, {SLACK_USER_ID: slack_id}, USERS_VK_USER_ID, user_id)
         send_to_slack(user_id, messanger_id, slack_id)
-        return True
+    return True
 
 # Отправка сообщения в slack, пользователю в direct.
 def send_to_slack(user_id, messanger_id, slack_id):
@@ -154,10 +152,9 @@ def find_question(user_id, messanger_id, message):
         answer = select_column(ANS_QUES_ANSWER, ANS_QUES_QUESTION, message)
         if messanger_id == MES_TELEGRAM:
             update_column(users, {ANSWERS: answer}, USERS_TELEGRAM_USER_ID, user_id)
-            return True
         if messanger_id == MES_VK:
             update_column(users, {ANSWERS: answer}, USERS_VK_USER_ID, user_id)
-            return True
+        return True
     else:
         return False
 
@@ -180,10 +177,9 @@ def send_answer_to_telegram(user_id, messanger_id):
 def get_feedback_db(user_id, messanger_id, mark):
     if messanger_id == MES_TELEGRAM:
         update_column(users, {USER_MARK: mark}, USERS_TELEGRAM_USER_ID, user_id)
-        return True
     if messanger_id == MES_VK:
         update_column(users, {USER_MARK: mark}, USERS_VK_USER_ID, user_id)
-        return True
+    return True
 
 # Получить содержимое колонки.
 def select_column(search, search_term, condition):
