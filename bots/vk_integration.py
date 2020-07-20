@@ -34,20 +34,20 @@ class VKBot(object):
             if event.type == vk_api.longpoll.VkEventType.MESSAGE_NEW:
                 if event.to_me:
                     msg = event.text.lower()
-                    state = server.db_get_state(event.user_id, 2)
+                    state = server.db_get_state(event.user_id, MES_VK)
                     if msg == f'/{START}':
                         server.new_account_vk(event.user_id)
                         description = server.state_start(state)
                         self.message_sender(event.user_id, description)
                         if state == user_states.States.S_START.value:
-                            server.db_set_state(event.user_id, 2,
+                            server.db_set_state(event.user_id, MES_VK,
                                                 user_states.States.S_QUESTION.value)
                     elif msg == f'/{HELP}':
                         keyboard = self.get_keyboard(f'/{START}', f'/{HELP}', f'/{RESET}')
                         self.message_sender(event.user_id, HELP_DESCRIPTION, keyboard)
                     elif msg == f'/{RESET}':
                         self.message_sender(event.user_id, GO_START_COM)
-                        server.db_set_state(event.user_id, 2, user_states.States.S_QUESTION.value)
+                        server.db_set_state(event.user_id, MES_VK, user_states.States.S_QUESTION.value)
                     elif state == user_states.States.S_QUESTION.value:
                         self.get_question(event.user_id, event.text)
                     elif state == user_states.States.S_CHOOSE_LOC.value:
@@ -62,90 +62,86 @@ class VKBot(object):
                         self.get_feedback(event.user_id, event.text)
 
     def get_question(self, user_id, text):
-        detect = server.find_question(user_id, 2, text)
+        detect = server.find_question(user_id, MES_VK, text)
         if detect:
             keyboard = self.get_keyboard(VK, TELEGRAM, SLACK, EMAIL)
             self.message_sender(user_id, ANSWER_FOUND, keyboard)
             self.message_sender(user_id, WHERE_ANSWER)
-            server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC.value)
+            server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC.value)
 
     def get_location(self, user_id, text):
         if text.lower() == VK:
-            check_vk_id = server.check_vk_id(user_id, 2)
+            check_vk_id = server.check_vk_id(user_id, MES_VK)
             if check_vk_id:
                 self.message_sender(user_id, MARK)
-                server.db_set_state(user_id, 2,
+                server.db_set_state(user_id, MES_VK,
                                     user_states.States.S_FEEDBACK.value)
             else:
                 self.message_sender(user_id, FAULT)
-                server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_VK.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC_VK.value)
         elif text.lower() == TELEGRAM:
             telegram_username = server.check_telegram_username(user_id)
             if telegram_username:
-                answer = server.send_answer_to_telegram(user_id, 2)
+                answer = server.send_answer_to_telegram(user_id, MES_VK)
                 if answer:
                     self.message_sender(user_id, MESSAGE_SENT)
                     self.message_sender(user_id, MARK)
-                    server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
+                    server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
                 else:
                     self.message_sender(user_id, FAULT)
             else:
                 self.message_sender(user_id, NO_TELEGRAM_USER)
-                server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_TELEGRAM.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC_TELEGRAM.value)
         elif text.lower() == SLACK:
-            check_slack_id = server.check_slack_id(user_id, 2)
+            check_slack_id = server.check_slack_id(user_id, MES_VK)
             if check_slack_id:
                 self.message_sender(user_id, MESSAGE_SENT)
                 self.message_sender(user_id, MARK)
-                server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
             else:
                 self.message_sender(user_id, NO_SLACK_ID)
-                server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_SLACK.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC_SLACK.value)
         elif text.lower() == EMAIL:
             self.message_sender(user_id, NO_EMAIL)
-            server.db_set_state(user_id, 2, user_states.States.S_CHOOSE_LOC_MAIL.value)
+            server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC_MAIL.value)
 
     def get_location_telegram(self, user_id, text):
         username = server.set_telegram_username(user_id, text)
         if username:
-            server.db_set_state(user_id, 2,
+            server.db_set_state(user_id, MES_VK,
                                 user_states.States.S_CHOOSE_LOC.value)
 
     def get_location_mail(self, user_id, text):
         pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')
         result = pattern.findall(text)
         if result:
-            send_text = server.send_mail(user_id, 2, text)
+            send_text = server.send_mail(user_id, MES_VK, text)
             if send_text:
                 self.message_sender(user_id, MESSAGE_SENT)
                 self.message_sender(user_id, MARK)
-                server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
-            else:
-                self.message_sender(user_id, FAULT)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
         else:
             self.message_sender(user_id, FAULT)
 
     def get_location_slack(self, user_id, text):
-        if len(text) == 11:
-            slack_id_to_db = server.set_slack_id_to_db(user_id, 2, text)
+        if len(text) == SLACK_ID_LEN:
+            slack_id_to_db = server.set_slack_id_to_db(user_id, MES_VK, text)
             if slack_id_to_db:
                 self.message_sender(user_id, MESSAGE_SENT)
                 self.message_sender(user_id, MARK)
-                server.db_set_state(user_id, 2, user_states.States.S_FEEDBACK.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
             else:
                 self.message_sender(user_id, FAULT)
         else:
             self.message_sender(user_id, WRONG_ID)
-            return
 
     def get_feedback(self, user_id, text):
-        if not text.isdigit() or (int(text) < 1 or int(text) > 5):
+        if not text.isdigit() or (int(text) < RATING_MIN or int(text) > RATING_MAX):
             self.message_sender(user_id, WRONG_MARK)
-            return
         else:
-            result_feedback = server.get_feedback_db(user_id, 2, text)
+            result_feedback = server.get_feedback_db(user_id, MES_VK, text)
             if result_feedback:
                 self.message_sender(user_id, FEEDBACK)
-                server.db_set_state(user_id, 2, user_states.States.S_QUESTION.value)
+                server.db_set_state(user_id, MES_VK, user_states.States.S_QUESTION.value)
             else:
                 self.message_sender(user_id, FAULT)

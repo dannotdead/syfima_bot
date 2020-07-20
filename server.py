@@ -13,18 +13,18 @@ from standing.constants import *
 
 # Получение состояния у пользователя.
 def db_get_state(user_id, messanger_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         current_state = select_column(USERS_STATE, USERS_TELEGRAM_USER_ID, user_id)
         return current_state
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         current_state = select_column(USERS_STATE, USERS_VK_USER_ID, user_id)
         return current_state
 
 # Запись состояния для пользователя.
 def db_set_state(user_id, messanger_id, state):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         update_column(users, {STATE: state}, USERS_TELEGRAM_USER_ID, user_id)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         update_column(users, {STATE: state}, USERS_VK_USER_ID, user_id)
 
 # Выбирает описание состояния по текущему состоянию при вызове /start.
@@ -72,9 +72,9 @@ def set_vk_db(message, user_id):
 
 # Проверка в базе данных VK-id пользователя и отправка ответа на вопрос в VK.
 def check_vk_id(user_id, messanger_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         check_vk_id = select_column(USERS_VK_USER_ID, USERS_TELEGRAM_USER_ID, user_id)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         check_vk_id = select_column(USERS_VK_USER_ID, USERS_VK_USER_ID, user_id)
 
     if check_vk_id == 0 or check_vk_id is None:
@@ -85,18 +85,18 @@ def check_vk_id(user_id, messanger_id):
 
 # Отправка ответа в VK.
 def _message_to_vk(user_id, messanger_id, vk_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
         msg_to_vk.send(vk_id, REPLY + answer)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
         msg_to_vk.send(vk_id, REPLY + answer)
 
 # Проверяет есть ли slack-id пользователя в базе данных.
 def check_slack_id(user_id, messanger_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         slack_id = select_column(USERS_SLACK_USER_ID, USERS_TELEGRAM_USER_ID, user_id)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         slack_id = select_column(USERS_SLACK_USER_ID, USERS_VK_USER_ID, user_id)
 
     if slack_id is None:
@@ -107,29 +107,29 @@ def check_slack_id(user_id, messanger_id):
 
 # Заполняет поле slack-id в базе данных.
 def set_slack_id_to_db(user_id, messanger_id, slack_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         update_column(users, {SLACK_USER_ID: slack_id}, USERS_TELEGRAM_USER_ID, user_id)
         send_to_slack(user_id, messanger_id, slack_id)
         return True
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         update_column(users, {SLACK_USER_ID: slack_id}, USERS_VK_USER_ID, user_id)
         send_to_slack(user_id, messanger_id, slack_id)
         return True
 
 # Отправка сообщения в slack, пользователю в direct.
 def send_to_slack(user_id, messanger_id, slack_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
         msg_to_slack.send(slack_id, answer)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
         msg_to_slack.send(slack_id, answer)
 
 # Отправка письма на почту пользователя.
 def send_mail(user_id, messanger_id, mail):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
     text = str(answer)
     msg = MIMEText(text.encode('utf-8'), 'plain', 'utf-8')
@@ -152,10 +152,10 @@ def find_question(user_id, messanger_id, message):
         output = int(result.fetchone()[0])
     if output == 1:
         answer = select_column(ANS_QUES_ANSWER, ANS_QUES_QUESTION, message)
-        if messanger_id == 1:
+        if messanger_id == MES_TELEGRAM:
             update_column(users, {ANSWERS: answer}, USERS_TELEGRAM_USER_ID, user_id)
             return True
-        if messanger_id == 2:
+        if messanger_id == MES_VK:
             update_column(users, {ANSWERS: answer}, USERS_VK_USER_ID, user_id)
             return True
     else:
@@ -163,13 +163,13 @@ def find_question(user_id, messanger_id, message):
 
 # Отправка ответа на вопрос от пользователя в telegram.
 def send_answer_to_telegram(user_id, messanger_id):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         answer = select_column(USERS_ANSWERS, USERS_TELEGRAM_USER_ID, user_id)
         if answer is not None:
             return answer
         else:
             return FAULT
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         answer = select_column(USERS_ANSWERS, USERS_VK_USER_ID, user_id)
         if answer is not None:
             tel_id = select_column(USERS_TELEGRAM_USER_ID, USERS_VK_USER_ID, user_id)
@@ -178,10 +178,10 @@ def send_answer_to_telegram(user_id, messanger_id):
 
 # Запись оценки пользователя в базу данных.
 def get_feedback_db(user_id, messanger_id, mark):
-    if messanger_id == 1:
+    if messanger_id == MES_TELEGRAM:
         update_column(users, {USER_MARK: mark}, USERS_TELEGRAM_USER_ID, user_id)
         return True
-    if messanger_id == 2:
+    if messanger_id == MES_VK:
         update_column(users, {USER_MARK: mark}, USERS_VK_USER_ID, user_id)
         return True
 
