@@ -87,8 +87,6 @@ class VKBot(object):
                     self.message_sender(user_id, MESSAGE_SENT)
                     self.message_sender(user_id, MARK)
                     server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
-                else:
-                    self.message_sender(user_id, FAULT)
             else:
                 self.message_sender(user_id, NO_TELEGRAM_USER)
                 server.db_set_state(user_id, MES_VK, user_states.States.S_CHOOSE_LOC_TELEGRAM.value)
@@ -130,8 +128,6 @@ class VKBot(object):
                 self.message_sender(user_id, MESSAGE_SENT)
                 self.message_sender(user_id, MARK)
                 server.db_set_state(user_id, MES_VK, user_states.States.S_FEEDBACK.value)
-            else:
-                self.message_sender(user_id, FAULT)
         else:
             self.message_sender(user_id, WRONG_ID)
 
@@ -143,5 +139,3 @@ class VKBot(object):
             if result_feedback:
                 self.message_sender(user_id, FEEDBACK)
                 server.db_set_state(user_id, MES_VK, user_states.States.S_QUESTION.value)
-            else:
-                self.message_sender(user_id, FAULT)
