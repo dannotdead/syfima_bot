@@ -152,7 +152,7 @@ class TelegramBot(object):
                 self.message_sender(message, FAULT)
 
     def get_location_mail(self, message):
-        pattern = re.compile(r'[\w.-]+@[\w.-]+\.?[\w]+?')
+        pattern = re.compile(CHECK_EMAIL)
         result = pattern.findall(message.text)
         if result:
             send_text = server.send_mail(message.chat.id, MES_TELEGRAM, message.text)
