@@ -48,18 +48,12 @@ class VKBot(object):
                     elif msg == f'/{RESET}':
                         self.message_sender(event.user_id, GO_START_COM)
                         server.db_set_state(event.user_id, MES_VK, user_states.States.S_QUESTION.value)
-                    elif state == user_states.States.S_QUESTION.value:
-                        self.get_question(event.user_id, event.text)
-                    elif state == user_states.States.S_CHOOSE_LOC.value:
-                        self.get_location(event.user_id, event.text)
-                    elif state == user_states.States.S_CHOOSE_LOC_TELEGRAM.value:
-                        self.get_location_telegram(event.user_id, event.text)
-                    elif state == user_states.States.S_CHOOSE_LOC_MAIL.value:
-                        self.get_location_mail(event.user_id, event.text)
-                    elif state == user_states.States.S_CHOOSE_LOC_SLACK.value:
-                        self.get_location_slack(event.user_id, event.text)
-                    elif state == user_states.States.S_FEEDBACK.value:
-                        self.get_feedback(event.user_id, event.text)
+                    else:
+                        self.which_state(state, event.user_id, event.text)
+
+    def which_state(self, state, user_id, text):
+        run = server.state_handling_vk(state)
+        exec(run)
 
     def get_question(self, user_id, text):
         detect = server.find_question(user_id, MES_VK, text)

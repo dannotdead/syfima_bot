@@ -11,6 +11,7 @@ metadata = MetaData(engine)
 users = Table('users', metadata, autoload=True)
 ans_ques = Table('ans_ques', metadata, autoload=True)
 states = Table('states', metadata, autoload=True)
+run_state = Table('run_state', metadata, autoload=True)
 
 USERS_STATE = users.c.state
 USERS_TELEGRAM_USER_ID = users.c.telegram_user_id
@@ -24,6 +25,9 @@ ANS_QUES_QUESTION = ans_ques.c.question
 
 STATES_STATE = states.c.state
 STATES_DESCRIPTION = states.c.description
+
+RUN_STATE_NUMBER = run_state.c.number_state
+RUN_STATE_EXEC = run_state.c.exec_state
 
 STATE = 'state'
 TELEGRAM_USER_ID = 'telegram_user_id'

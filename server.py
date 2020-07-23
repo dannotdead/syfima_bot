@@ -155,8 +155,6 @@ def find_question(user_id, messanger_id, message):
         if messanger_id == MES_VK:
             update_column(users, {ANSWERS: answer}, USERS_VK_USER_ID, user_id)
         return True
-    else:
-        return False
 
 # Отправка ответа на вопрос от пользователя в telegram.
 def send_answer_to_telegram(user_id, messanger_id):
@@ -180,6 +178,11 @@ def get_feedback_db(user_id, messanger_id, mark):
     if messanger_id == MES_VK:
         update_column(users, {USER_MARK: mark}, USERS_VK_USER_ID, user_id)
     return True
+
+# Получает метод для нужного состояния из базы данных.
+def state_handling_vk(state):
+    state_handle = select_column(RUN_STATE_EXEC, RUN_STATE_NUMBER, state)
+    return state_handle
 
 # Получить содержимое колонки.
 def select_column(search, search_term, condition):
