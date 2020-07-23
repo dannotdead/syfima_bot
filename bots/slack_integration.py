@@ -11,6 +11,3 @@ class SlackBot(object):
 	@classmethod
 	def main(cls, user_id, message):
 		cls.slack_connect.chat.post_message(user_id, REPLY + message)
-
-if __name__ == '__main__':
-	SlackBot.main()
